@@ -44,6 +44,25 @@ export default function Users() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [cooldown, setCooldown] = useState(0);
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (cooldown > 0) {
+      timer = setInterval(() => {
+        setCooldown(prev => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [cooldown]);
 
   useEffect(() => {
     const isAdmin = user?.app_metadata?.role === 'admin' || user?.user_metadata?.role === 'admin';
@@ -105,6 +124,12 @@ export default function Users() {
       setSuccess(null);
       setLoading(true);
 
+      // Verificar se está em cooldown
+      if (cooldown > 0) {
+        setError(`Por favor, aguarde ${cooldown} segundos antes de tentar criar outro usuário.`);
+        return;
+      }
+
       // Validar senha
       if (newUser.password.length < 6) {
         setError('A senha deve ter no mínimo 6 caracteres.');
@@ -118,7 +143,7 @@ export default function Users() {
         return;
       }
 
-      // Criar usuário já confirmado
+      // Criar usuário com confirmação automática
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: newUser.email,
         password: newUser.password,
@@ -127,44 +152,44 @@ export default function Users() {
             full_name: newUser.full_name,
             role: newUser.role
           },
-          emailRedirectTo: `${window.location.origin}/login`
+          emailRedirectTo: window.location.origin
         }
       });
 
       if (signUpError) {
         console.error('Erro ao criar usuário:', signUpError);
+        
+        if (signUpError.message.includes('6 seconds') || signUpError.message.includes('24 seconds')) {
+          setCooldown(6);
+          setError('Por favor, aguarde 6 segundos antes de tentar criar outro usuário. Esta é uma medida de segurança.');
+          return;
+        }
+        
         throw signUpError;
       }
 
       if (data.user) {
-        // Confirmar o email do usuário automaticamente
-        const { error: updateError } = await supabase.auth.admin.updateUserById(
-          data.user.id,
-          { email_confirm: true }
-        );
+        // Criar perfil diretamente na tabela profiles
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .insert([{
+            id: data.user.id,
+            email: newUser.email,
+            full_name: newUser.full_name,
+            role: newUser.role,
+            created_at: new Date().toISOString()
+          }]);
 
-        if (updateError) {
-          console.error('Erro ao confirmar usuário:', updateError);
-          // Continuar mesmo se falhar a confirmação
-        }
-
-        // Criar perfil para o novo usuário usando RPC
-        const { error: rpcError } = await supabase.rpc('create_user_profile', {
-          user_id: data.user.id,
-          user_email: newUser.email,
-          user_full_name: newUser.full_name,
-          user_role: newUser.role
-        });
-
-        if (rpcError) {
-          console.error('Erro ao criar perfil:', rpcError);
-          throw rpcError;
+        if (profileError) {
+          console.error('Erro ao criar perfil:', profileError);
+          throw profileError;
         }
 
         setShowModal(false);
         setNewUser({ email: '', password: '', full_name: '', role: 'user' });
         await fetchProfiles();
         setSuccess('Usuário criado com sucesso!');
+        setCooldown(6);
       }
     } catch (error: any) {
       console.error('Erro detalhado:', error);
@@ -178,6 +203,10 @@ export default function Users() {
         errorMessage = 'Você não tem permissão para criar usuários.';
       } else if (error.message?.includes('weak password')) {
         errorMessage = 'A senha deve ter no mínimo 6 caracteres.';
+      } else if (error.message?.includes('6 seconds') || error.message?.includes('24 seconds')) {
+        errorMessage = 'Por favor, aguarde 6 segundos antes de tentar criar outro usuário. Esta é uma medida de segurança.';
+      } else if (error.message?.includes('Apenas administradores podem criar perfis')) {
+        errorMessage = 'Você não tem permissão de administrador para criar perfis.';
       }
       
       setError(errorMessage);
@@ -448,6 +477,11 @@ export default function Users() {
               <UserPlus size={24} className="text-green-500 animate-bounce-light" />
               <span>Adicionar Novo Usuário</span>
             </h2>
+            {cooldown > 0 && (
+              <div className="mb-4 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 rounded-lg">
+                <p>Aguarde {cooldown} segundos antes de criar outro usuário.</p>
+              </div>
+            )}
             <form onSubmit={handleAddUser} className="space-y-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Nome</label>
