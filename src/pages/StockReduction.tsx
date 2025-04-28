@@ -89,6 +89,27 @@ export default function StockReduction() {
 
       if (movementError) throw movementError;
 
+      // Atualizar a quantidade do equipamento diretamente
+      const { data: currentEquipment, error: fetchError } = await supabase
+        .from('equipment')
+        .select('quantity')
+        .eq('id', form.equipmentId)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      const newQuantity = (currentEquipment?.quantity || 0) - quantityToReduce;
+
+      const { error: updateError } = await supabase
+        .from('equipment')
+        .update({ 
+          quantity: newQuantity,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', form.equipmentId);
+
+      if (updateError) throw updateError;
+
       // Atualizar a lista de equipamentos após a baixa
       const { data: updatedEquipment, error: refreshError } = await supabase
         .from('equipment')
