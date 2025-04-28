@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowUpCircle, ArrowDownCircle, Trash, Package, Plus, ArrowUpDown } from 'lucide-react';
+import { ArrowUpCircle, ArrowDownCircle, Trash, Package, Plus, ArrowUpDown, Search } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import ConfirmModal from '../components/ConfirmModal';
@@ -39,12 +39,13 @@ export default function StockMovements() {
   const { session } = useAuth();
   const [equipment, setEquipment] = useState<Equipment[]>([]);
   const [movements, setMovements] = useState<Movement[]>([]);
-  const [form, setForm] = useState({ equipmentId: '', quantity: 0, type: 'in' as 'in' | 'out', description: '' });
+  const [form, setForm] = useState({ equipmentId: '', quantity: 0, type: 'in' as 'in', description: '' });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(true);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [movementToDelete, setMovementToDelete] = useState<Movement | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const loadData = async () => {
     try {
@@ -192,9 +193,9 @@ export default function StockMovements() {
 
       if (fetchError) throw fetchError;
 
-      const newQuantity = movementToDelete.type === 'in'
-        ? (currentEquipment?.quantity || 0) - movementToDelete.quantity
-        : (currentEquipment?.quantity || 0) + movementToDelete.quantity;
+      const newQuantity = form.type === 'in' 
+        ? (currentEquipment?.quantity || 0) + movementToDelete.quantity
+        : (currentEquipment?.quantity || 0) - movementToDelete.quantity;
 
       const { error: updateError } = await supabase
         .from('equipment')
@@ -251,14 +252,13 @@ export default function StockMovements() {
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white p-6 rounded-xl shadow-xl transform hover:scale-[1.01] 
-                     transition-all duration-300">
-          <h3 className="text-lg font-semibold mb-4 flex items-center space-x-2">
+        <div className="bg-white p-4 rounded-xl shadow-xl transform hover:scale-[1.01] transition-all duration-300">
+          <h3 className="text-lg font-semibold mb-2 flex items-center space-x-2">
             <Plus size={24} className="text-green-600" />
             <span>Registrar Movimentação</span>
           </h3>
           
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-2">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Equipamento</label>
               <div className="relative">
@@ -296,19 +296,18 @@ export default function StockMovements() {
                 className="w-full rounded-lg border-gray-300 shadow-sm focus:border-green-500 
                          focus:ring-green-500 transition-all duration-200"
                 value={form.type}
-                onChange={(e) => setForm({ ...form, type: e.target.value as 'in' | 'out' })}
+                onChange={(e) => setForm({ ...form, type: e.target.value as 'in' })}
               >
                 <option value="in">Entrada</option>
-                <option value="out">Saída</option>
               </select>
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Descrição</label>
               <textarea
-                className="w-full rounded-lg border-gray-300 shadow-sm focus:border-green-500 
+                className="w-full rounded-lg border-gray-300 shadow-sm focus:border-green-500 \
                          focus:ring-green-500 transition-all duration-200"
-                rows={3}
+                rows={2}
                 value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
               ></textarea>
@@ -316,8 +315,8 @@ export default function StockMovements() {
 
             <button 
               type="submit" 
-              className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 
-                       rounded-lg shadow-lg transform hover:scale-105 transition-all duration-200
+              className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 \
+                       rounded-lg shadow-lg transform hover:scale-105 transition-all duration-200\
                        flex items-center justify-center space-x-2"
             >
               <Plus size={20} className="animate-bounce-light" />
@@ -329,6 +328,16 @@ export default function StockMovements() {
         <div className="bg-white p-6 rounded-xl shadow-xl transform hover:scale-[1.01] 
                      transition-all duration-300">
           <h3 className="text-lg font-semibold mb-4">Histórico de Movimentações</h3>
+          <div className="mb-4 relative">
+            <input
+              type="text"
+              placeholder="Buscar por equipamento..."
+              className="w-full rounded-lg border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 px-3 py-2 pl-10"
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+            />
+            <Search size={18} className="absolute left-3 top-2.5 text-gray-400" />
+          </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
@@ -354,7 +363,9 @@ export default function StockMovements() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {movements.map((movement) => (
+                {movements
+                  .filter(movement => movement.equipment.name.toLowerCase().includes(searchTerm.toLowerCase()))
+                  .map((movement) => (
                   <tr key={movement.id} className="hover:bg-gray-50 transition-colors duration-200">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-gray-900">

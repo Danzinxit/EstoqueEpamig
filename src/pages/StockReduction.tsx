@@ -16,6 +16,7 @@ export default function StockReduction() {
     equipmentId: '',
     quantity: '',
     ticket: '',
+    receiver: '',
     observation: '',
   });
   const [success, setSuccess] = useState('');
@@ -82,9 +83,9 @@ export default function StockReduction() {
           equipment_id: form.equipmentId,
           quantity: quantityToReduce,
           type: 'out',
-          description: form.ticket 
-            ? `Chamado: ${form.ticket}. ${form.observation}` 
-            : form.observation
+          description: (form.ticket ? `Chamado: ${form.ticket}. ` : '') +
+                       (form.receiver ? `Recebedor: ${form.receiver}. ` : '') +
+                       form.observation
         }]);
 
       if (movementError) throw movementError;
@@ -120,7 +121,7 @@ export default function StockReduction() {
       setEquipment(updatedEquipment || []);
 
       setSuccess('Baixa registrada com sucesso!');
-      setForm({ equipmentId: '', quantity: '', ticket: '', observation: '' });
+      setForm({ equipmentId: '', quantity: '', ticket: '', receiver: '', observation: '' });
     } catch (error: any) {
       console.error('Erro ao registrar baixa:', error);
       setError(error.message || 'Erro ao registrar baixa.');
@@ -212,6 +213,18 @@ export default function StockReduction() {
             value={form.ticket}
             onChange={(e) => setForm({ ...form, ticket: e.target.value })}
             placeholder="Número do chamado (opcional)"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Recebedor</label>
+          <input
+            type="text"
+            className="w-full rounded-lg border-gray-300 shadow-sm focus:border-green-500 \
+                    focus:ring-green-500 transition-all duration-200"
+            value={form.receiver}
+            onChange={(e) => setForm({ ...form, receiver: e.target.value })}
+            placeholder="Nome de quem está recebendo o equipamento"
           />
         </div>
 
