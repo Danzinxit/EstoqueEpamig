@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Edit2, Trash2, UserPlus, UserCog, Users as UsersIcon, Key } from 'lucide-react';
+import { Search, Edit2, Trash2, UserPlus, UserCog, Users as UsersIcon, Key } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -246,10 +246,10 @@ export default function Users() {
         throw new Error('A senha deve ter no mínimo 6 caracteres');
       }
 
-      const { error } = await supabase.auth.admin.updateUserById(
-        selectedUserId,
-        { password: passwordForm.newPassword }
-      );
+      const { error } = await supabase.rpc('change_user_password', {
+        target_user_id: selectedUserId,
+        new_password: passwordForm.newPassword
+      });
 
       if (error) throw error;
 

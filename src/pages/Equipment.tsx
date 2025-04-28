@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { Plus, Edit2, Trash2, Search, Package } from 'lucide-react';
+import { Plus, Edit2, Trash2 } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
 
 interface Equipment {
@@ -10,6 +10,9 @@ interface Equipment {
   description: string;
   quantity: number;
   created_at: string;
+  category: string;
+  location: string;
+  status: string;
 }
 
 interface FormData {
@@ -17,12 +20,26 @@ interface FormData {
   name: string;
   description: string;
   quantity: number;
+  category: string;
+  location: string;
+  status: string;
+  lastMaintenance?: string;
+  nextMaintenance?: string;
+  notes?: string;
 }
 
 export default function Equipment() {
   const { session } = useAuth();
   const [equipment, setEquipment] = useState<Equipment[]>([]);
-  const [form, setForm] = useState<FormData>({ id: null, name: '', description: '', quantity: 0 });
+  const [form, setForm] = useState<FormData>({ 
+    id: null, 
+    name: '', 
+    description: '', 
+    quantity: 0, 
+    category: '', 
+    location: '', 
+    status: '' 
+  });
   const [isEditing, setIsEditing] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -93,7 +110,15 @@ export default function Equipment() {
         if (error) throw error;
       }
 
-      setForm({ id: null, name: '', description: '', quantity: 0 });
+      setForm({ 
+        id: null, 
+        name: '', 
+        description: '', 
+        quantity: 0,
+        category: '',
+        location: '',
+        status: ''
+      });
       setIsEditing(false);
       setShowModal(false);
 
@@ -116,29 +141,13 @@ export default function Equipment() {
       id: item.id, 
       name: item.name, 
       description: item.description || '', 
-      quantity: item.quantity 
+      quantity: item.quantity,
+      category: item.category || '',
+      location: item.location || '',
+      status: item.status || ''
     });
     setIsEditing(true);
     setShowModal(true);
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!confirm('Tem certeza que deseja deletar este equipamento?')) return;
-
-    try {
-      setError(null);
-      const { error } = await supabase
-        .from('equipment')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
-      
-      setEquipment(equipment.filter((item) => item.id !== id));
-    } catch (error) {
-      console.error('Erro ao deletar equipamento:', error);
-      setError('Erro ao deletar equipamento. Por favor, tente novamente.');
-    }
   };
 
   const handleDeleteClick = (equipment: Equipment) => {
@@ -176,7 +185,15 @@ export default function Equipment() {
         <button
           onClick={() => {
             setIsEditing(false);
-            setForm({ id: null, name: '', description: '', quantity: 0 });
+            setForm({ 
+              id: null, 
+              name: '', 
+              description: '', 
+              quantity: 0,
+              category: '',
+              location: '',
+              status: ''
+            });
             setShowModal(true);
           }}
           className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg 
@@ -282,7 +299,7 @@ export default function Equipment() {
                     <div className="flex flex-col items-center space-y-2">
                       <svg className="w-12 h-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                              d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M12 12h.01M12 14h.01M12 16h.01M12 18h.01M12 20h.01M12 22h.01" />
+                              d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M12 12h.01M12 14h.01M12 16h.01M12 18h.01M12 20h.01M12 22h.01M12 22h.01" />
                       </svg>
                       <span className="text-lg">Nenhum equipamento encontrado</span>
                     </div>
@@ -351,7 +368,15 @@ export default function Equipment() {
                            hover:bg-gray-50 transform hover:scale-105 transition-all duration-200"
                   onClick={() => {
                     setShowModal(false);
-                    setForm({ id: null, name: '', description: '', quantity: 0 });
+                    setForm({ 
+                      id: null, 
+                      name: '', 
+                      description: '', 
+                      quantity: 0,
+                      category: '',
+                      location: '',
+                      status: ''
+                    });
                     setIsEditing(false);
                   }}
                 >
@@ -385,43 +410,4 @@ export default function Equipment() {
       />
     </div>
   );
-}
-
-// Adicione estes estilos ao seu arquivo CSS
-const styles = `
-@keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes slide-in-right {
-  from { transform: translateX(100%); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
-}
-
-@keyframes scale-in {
-  from { transform: scale(0.95); opacity: 0; }
-  to { transform: scale(1); opacity: 1; }
-}
-
-@keyframes bounce-light {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-25%); }
-}
-
-.animate-fade-in {
-  animation: fade-in 0.3s ease-out;
-}
-
-.animate-slide-in-right {
-  animation: slide-in-right 0.3s ease-out;
-}
-
-.animate-scale-in {
-  animation: scale-in 0.3s ease-out;
-}
-
-.animate-bounce-light {
-  animation: bounce-light 1s infinite;
-}
-`; 
+} 

@@ -12,7 +12,23 @@ interface Equipment {
 interface Movement {
   id: string;
   equipment_id: string;
-  equipment: { name: string };
+  equipment: {
+    id: string;
+    name: string;
+  };
+  quantity: number;
+  type: 'in' | 'out';
+  description: string;
+  created_at: string;
+}
+
+interface RawMovement {
+  id: string;
+  equipment_id: string;
+  equipment: {
+    id: string;
+    name: string;
+  } | null;
   quantity: number;
   type: 'in' | 'out';
   description: string;
@@ -54,7 +70,10 @@ export default function StockMovements() {
         .select(`
           id,
           equipment_id,
-          equipment:equipment_id (name),
+          equipment:equipment_id (
+            id,
+            name
+          ),
           quantity,
           type,
           description,
@@ -64,17 +83,20 @@ export default function StockMovements() {
 
       if (movementsError) throw movementsError;
       
-      const typedMovements = (movementsData || []).map(movement => ({
-        id: movement.id,
-        equipment_id: movement.equipment_id,
-        equipment: { 
-          name: movement.equipment ? movement.equipment.name : 'Equipamento não encontrado' 
-        },
-        quantity: movement.quantity,
-        type: movement.type as 'in' | 'out',
-        description: movement.description || '',
-        created_at: movement.created_at
-      }));
+      const typedMovements = (movementsData as unknown as RawMovement[] || []).map(movement => {
+        return {
+          id: movement.id,
+          equipment_id: movement.equipment_id,
+          equipment: {
+            id: movement.equipment?.id || 'equipamento-nao-encontrado',
+            name: movement.equipment?.name || 'Equipamento não encontrado'
+          },
+          quantity: movement.quantity,
+          type: movement.type,
+          description: movement.description || '',
+          created_at: movement.created_at
+        };
+      }) as Movement[];
       
       setMovements(typedMovements);
     } catch (error: any) {
@@ -100,6 +122,7 @@ export default function StockMovements() {
     }
 
     try {
+      // Inserir a movimentação
       const { error: movementError } = await supabase
         .from('stock_movements')
         .insert([{
@@ -110,6 +133,29 @@ export default function StockMovements() {
         }]);
 
       if (movementError) throw movementError;
+
+      // Atualizar a quantidade do equipamento diretamente
+      const { data: currentEquipment, error: fetchError } = await supabase
+        .from('equipment')
+        .select('quantity')
+        .eq('id', form.equipmentId)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      const newQuantity = form.type === 'in' 
+        ? (currentEquipment?.quantity || 0) + form.quantity
+        : (currentEquipment?.quantity || 0) - form.quantity;
+
+      const { error: updateError } = await supabase
+        .from('equipment')
+        .update({ 
+          quantity: newQuantity,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', form.equipmentId);
+
+      if (updateError) throw updateError;
 
       setSuccess('Movimentação registrada com sucesso!');
       setForm({ equipmentId: '', quantity: 0, type: 'in', description: '' });
@@ -129,12 +175,36 @@ export default function StockMovements() {
     if (!movementToDelete) return;
 
     try {
+      // Excluir a movimentação
       const { error } = await supabase
         .from('stock_movements')
         .delete()
         .eq('id', movementToDelete.id);
 
       if (error) throw error;
+
+      // Atualizar a quantidade do equipamento diretamente
+      const { data: currentEquipment, error: fetchError } = await supabase
+        .from('equipment')
+        .select('quantity')
+        .eq('id', movementToDelete.equipment_id)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      const newQuantity = movementToDelete.type === 'in'
+        ? (currentEquipment?.quantity || 0) - movementToDelete.quantity
+        : (currentEquipment?.quantity || 0) + movementToDelete.quantity;
+
+      const { error: updateError } = await supabase
+        .from('equipment')
+        .update({ 
+          quantity: newQuantity,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', movementToDelete.equipment_id);
+
+      if (updateError) throw updateError;
       
       setSuccess('Movimentação deletada com sucesso.');
       await loadData();
@@ -283,7 +353,7 @@ export default function StockMovements() {
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody className="divide-y divide-gray-200">
                 {movements.map((movement) => (
                   <tr key={movement.id} className="hover:bg-gray-50 transition-colors duration-200">
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -315,7 +385,7 @@ export default function StockMovements() {
                         {new Date(movement.created_at).toLocaleDateString('pt-BR')}
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <button
                         onClick={() => handleDeleteMovement(movement)}
                         className="text-red-600 hover:text-red-900 transition-colors duration-200"

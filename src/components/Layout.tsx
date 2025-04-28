@@ -1,4 +1,3 @@
-import React from 'react';
 import { Link, useNavigate, Outlet, useLocation } from 'react-router-dom';
 import { Package2, Users, ArrowDownUp, Home, ClipboardCheck, Mail, Globe, User, LogOut } from 'lucide-react';
 import epamigLogo from '../fotos/epamig.png';
