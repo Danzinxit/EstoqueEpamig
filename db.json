@@ -1,0 +1,43 @@
+{
+  "equipment": [
+    {
+      "id": "1",
+      "name": "Computador",
+      "description": "Computador Dell i5",
+      "quantity": 10
+    },
+    {
+      "id": "2",
+      "name": "Monitor",
+      "description": "Monitor LG 24 polegadas",
+      "quantity": 15
+    },
+    {
+      "id": "bd00",
+      "name": "sss",
+      "description": "sss",
+      "quantity": 66
+    }
+  ],
+  "stock": [
+    {
+      "id": "1",
+      "equipment_id": 1,
+      "equipment": {
+        "name": "Computador"
+      },
+      "quantity": 5,
+      "type": "in",
+      "description": "Entrada inicial",
+      "created_at": "2024-04-27T10:00:00Z"
+    }
+  ],
+  "users": [
+    {
+      "id": "1",
+      "name": "Admin",
+      "email": "admin@epamig.br",
+      "role": "admin"
+    }
+  ]
+}
