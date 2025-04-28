@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import epamigLogo from '../fotos/epamig.png';
 import { Eye, EyeOff } from 'lucide-react';
 
 export default function Login() {
@@ -41,7 +40,7 @@ export default function Login() {
       <div className="bg-white p-8 rounded-2xl shadow-2xl w-96 transform hover:scale-[1.02] transition-all duration-300 animate-fade-in">
         <div className="flex flex-col items-center mb-8">
           <img 
-            src={epamigLogo} 
+            src="/epamig.png" 
             alt="Logo EPAMIG" 
             className="h-20 w-auto mb-6 animate-float" 
           />
@@ -58,7 +57,7 @@ export default function Login() {
             <input
               id="email"
               type="email"
-              className="w-full rounded-lg border border-gray-300 px-4 py-3 shadow-sm 
+              className="w-full rounded-lg border border-gray-300 px-4 py-3 shadow-sm \
                        focus:border-green-500 focus:ring-2 focus:ring-green-200 focus:outline-none
                        transition-all duration-200"
               value={email}
@@ -77,7 +76,7 @@ export default function Login() {
               <input
                 id="password"
                 type={showPassword ? "text" : "password"}
-                className="w-full rounded-lg border border-gray-300 px-4 py-3 shadow-sm 
+                className="w-full rounded-lg border border-gray-300 px-4 py-3 shadow-sm \
                          focus:border-green-500 focus:ring-2 focus:ring-green-200 focus:outline-none
                          transition-all duration-200 pr-12"
                 value={password}
@@ -117,12 +116,12 @@ export default function Login() {
 
           <button
             type="submit"
-            className="w-full flex justify-center items-center py-3 px-4 border border-transparent 
-                     rounded-lg shadow-sm text-sm font-medium text-white bg-green-600 
-                     hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 
+            className="w-full flex justify-center items-center py-3 px-4 border border-transparent \
+                     rounded-lg shadow-sm text-sm font-medium text-white bg-green-600 \
+                     hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 \
                      focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed
-                     transform hover:scale-[1.02] transition-all duration-200
-                     disabled:hover:scale-100"
+                     transform transition-all duration-200 hover:scale-105 active:scale-95
+                     animate-pulse-light"
             disabled={loading}
           >
             {loading ? (
@@ -131,10 +130,10 @@ export default function Login() {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
-                <span className="animate-pulse">Entrando...</span>
+                <span className="animate-pulse font-semibold">Entrando...</span>
               </>
             ) : (
-              'Entrar'
+              <span className="font-semibold animate-pulse-light">Entrar</span>
             )}
           </button>
         </form>

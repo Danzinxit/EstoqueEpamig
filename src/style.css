@@ -18,6 +18,10 @@
   .animate-bounce-light {
     animation: bounceLight 1s infinite;
   }
+
+  .animate-spin-slow {
+    animation: spin-slow 1s linear;
+  }
 }
 
 @keyframes fadeIn {
@@ -58,6 +62,11 @@
   50% {
     transform: translateY(-5px);
   }
+}
+
+@keyframes spin-slow {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 :root {
@@ -394,6 +403,10 @@ button:focus-visible {
   animation: bounce-light 1s infinite;
 }
 
+.animate-spin-slow {
+  animation: spin-slow 1s linear;
+}
+
 /* Otimizações */
 * {
   backface-visibility: hidden;
@@ -418,4 +431,32 @@ button:focus-visible {
 .shadow-custom-lg {
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1),
               0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+/* Sidebar Styles */
+.sidebar {
+  transition: all 0.3s ease;
+}
+
+.sidebar-link {
+  transition: all 0.2s ease;
+}
+
+.sidebar-link:hover {
+  transform: translateX(5px);
+}
+
+/* User Info Styles */
+.user-avatar {
+  transition: all 0.3s ease;
+}
+
+.user-avatar:hover {
+  transform: scale(1.05);
+}
+
+/* Active Link Styles */
+.active-link {
+  background-color: #f3f4f6;
+  border-left: 4px solid #10b981;
 }

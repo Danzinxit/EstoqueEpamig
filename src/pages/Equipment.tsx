@@ -47,6 +47,7 @@ export default function Equipment() {
   const [error, setError] = useState<string | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [equipmentToDelete, setEquipmentToDelete] = useState<Equipment | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   // Fetch equipment data
   useEffect(() => {
@@ -159,17 +160,40 @@ export default function Equipment() {
     if (!equipmentToDelete) return;
 
     try {
-      const { error } = await supabase
+      // Verificar se o usuário tem permissão de admin
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', session?.user?.id)
+        .single();
+
+      if (profileError) throw profileError;
+      if (profile?.role !== 'admin') {
+        throw new Error('Você não tem permissão para excluir equipamentos.');
+      }
+
+      // Primeiro, excluir todas as movimentações relacionadas
+      const { error: deleteMovementsError } = await supabase
+        .from('stock_movements')
+        .delete()
+        .eq('equipment_id', equipmentToDelete.id);
+
+      if (deleteMovementsError) throw deleteMovementsError;
+
+      // Depois, excluir o equipamento
+      const { error: deleteError } = await supabase
         .from('equipment')
         .delete()
         .eq('id', equipmentToDelete.id);
 
-      if (error) throw error;
+      if (deleteError) throw deleteError;
       
+      // Atualizar o estado local
       setEquipment(equipment.filter((item) => item.id !== equipmentToDelete.id));
+      setSuccess('Equipamento excluído com sucesso!');
     } catch (error: any) {
       console.error('Erro ao deletar equipamento:', error);
-      setError(error.message || 'Erro ao deletar equipamento');
+      setError(error.message || 'Erro ao deletar equipamento. Verifique suas permissões.');
     } finally {
       setShowDeleteModal(false);
       setEquipmentToDelete(null);
@@ -209,6 +233,13 @@ export default function Equipment() {
         <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-lg mb-4 
                       animate-slide-in-right shadow-md">
           {error}
+        </div>
+      )}
+
+      {success && (
+        <div className="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 rounded-lg mb-4 
+                      animate-slide-in-right shadow-md">
+          {success}
         </div>
       )}
 

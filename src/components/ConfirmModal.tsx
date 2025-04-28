@@ -1,12 +1,13 @@
+import React, { useState } from 'react';
 import { AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
 
 interface ConfirmModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: () => void;
+  onConfirm: () => Promise<void>;
   title: string;
   message: string;
-  type?: 'warning' | 'success' | 'error';
+  type?: 'warning' | 'success' | 'error' | 'danger' | 'info';
   confirmText?: string;
   cancelText?: string;
 }
@@ -21,6 +22,8 @@ export default function ConfirmModal({
   confirmText = 'Confirmar',
   cancelText = 'Cancelar'
 }: ConfirmModalProps) {
+  const [isLoading, setIsLoading] = useState(false);
+
   if (!isOpen) return null;
 
   const getIcon = () => {
@@ -31,6 +34,10 @@ export default function ConfirmModal({
         return <CheckCircle2 size={48} className="text-green-500 animate-bounce-light" />;
       case 'error':
         return <XCircle size={48} className="text-red-500 animate-bounce-light" />;
+      case 'danger':
+        return <XCircle size={48} className="text-red-500 animate-bounce-light" />;
+      case 'info':
+        return <AlertTriangle size={48} className="text-blue-500 animate-bounce-light" />;
       default:
         return <AlertTriangle size={48} className="text-yellow-500 animate-bounce-light" />;
     }
@@ -44,8 +51,32 @@ export default function ConfirmModal({
         return 'bg-green-500 hover:bg-green-600';
       case 'error':
         return 'bg-red-500 hover:bg-red-600';
+      case 'danger':
+        return 'bg-red-500 hover:bg-red-600';
+      case 'info':
+        return 'bg-blue-500 hover:bg-blue-600';
       default:
         return 'bg-yellow-500 hover:bg-yellow-600';
+    }
+  };
+
+  const handleConfirm = async () => {
+    try {
+      setIsLoading(true);
+      await onConfirm();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const getTypeStyles = () => {
+    switch (type) {
+      case 'danger':
+        return 'bg-red-100 border-red-500 text-red-700';
+      case 'info':
+        return 'bg-blue-100 border-blue-500 text-blue-700';
+      default:
+        return 'bg-yellow-100 border-yellow-500 text-yellow-700';
     }
   };
 
@@ -60,18 +91,28 @@ export default function ConfirmModal({
           <div className="flex justify-end space-x-3 w-full mt-6">
             <button
               onClick={onClose}
+              disabled={isLoading}
               className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700
-                       hover:bg-gray-50 transform hover:scale-105 transition-all duration-200"
+                       hover:bg-gray-50 transform hover:scale-105 transition-all duration-200
+                       disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {cancelText}
             </button>
             <button
-              onClick={onConfirm}
+              onClick={handleConfirm}
+              disabled={isLoading}
               className={`px-4 py-2 rounded-lg text-white font-semibold
                        transform hover:scale-105 transition-all duration-200
                        ${getButtonColor()}`}
             >
-              {confirmText}
+              {isLoading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>Processando...</span>
+                </>
+              ) : (
+                confirmText
+              )}
             </button>
           </div>
         </div>
