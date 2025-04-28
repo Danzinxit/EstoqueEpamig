@@ -38,12 +38,98 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     try {
+      // Primeiro, tentamos fazer login
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (error) {
+        // Se o erro for de email não confirmado, tentamos uma abordagem diferente
+        if (error.message.includes('Email not confirmed')) {
+          try {
+            // Tentamos fazer login novamente com um pequeno delay
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            const { data: retryData, error: retryError } = await supabase.auth.signInWithPassword({
+              email,
+              password,
+            });
+
+            if (retryError) {
+              // Se ainda falhar, tentamos uma última vez
+              await new Promise(resolve => setTimeout(resolve, 2000));
+              
+              const { data: finalData, error: finalError } = await supabase.auth.signInWithPassword({
+                email,
+                password,
+              });
+
+              if (finalError) {
+                throw finalError;
+              }
+
+              // Atualiza o usuário com os dados da sessão
+              setSession(finalData.session);
+              setUser(finalData.user);
+
+              // Busca o perfil do usuário para obter a role
+              const { data: profileData, error: profileError } = await supabase
+                .from('profiles')
+                .select('role, full_name')
+                .eq('id', finalData.user.id)
+                .single();
+
+              if (profileError) {
+                console.error('Erro ao buscar perfil:', profileError);
+                return;
+              }
+
+              if (profileData?.role) {
+                // Atualiza os metadados do usuário com a role e full_name
+                await supabase.auth.updateUser({
+                  data: { 
+                    role: profileData.role,
+                    full_name: profileData.full_name
+                  }
+                });
+              }
+
+              return;
+            }
+
+            // Atualiza o usuário com os dados da sessão
+            setSession(retryData.session);
+            setUser(retryData.user);
+
+            // Busca o perfil do usuário para obter a role
+            const { data: profileData, error: profileError } = await supabase
+              .from('profiles')
+              .select('role, full_name')
+              .eq('id', retryData.user.id)
+              .single();
+
+            if (profileError) {
+              console.error('Erro ao buscar perfil:', profileError);
+              return;
+            }
+
+            if (profileData?.role) {
+              // Atualiza os metadados do usuário com a role e full_name
+              await supabase.auth.updateUser({
+                data: { 
+                  role: profileData.role,
+                  full_name: profileData.full_name
+                }
+              });
+            }
+
+            return;
+          } catch (retryError) {
+            console.error('Erro ao tentar fazer login novamente:', retryError);
+            throw error; // Mantemos o erro original
+          }
+        }
         throw error;
       }
 

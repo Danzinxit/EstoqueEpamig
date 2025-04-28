@@ -143,6 +143,22 @@ export default function Users() {
         return;
       }
 
+      // Verificar se o email já existe no profiles
+      const { data: existingProfile, error: profileCheckError } = await supabase
+        .from('profiles')
+        .select('id, email')
+        .eq('email', newUser.email)
+        .single();
+
+      if (profileCheckError && profileCheckError.code !== 'PGRST116') {
+        throw profileCheckError;
+      }
+
+      if (existingProfile) {
+        setError('Este email já está cadastrado no sistema.');
+        return;
+      }
+
       // Criar usuário com confirmação automática
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: newUser.email,
@@ -169,6 +185,20 @@ export default function Users() {
       }
 
       if (data.user) {
+        // Confirmar o email automaticamente
+        const { error: confirmError } = await supabase.auth.admin.updateUserById(
+          data.user.id,
+          { email_confirm: true }
+        );
+
+        if (confirmError) {
+          console.error('Erro ao confirmar email:', confirmError);
+          // Continuamos mesmo com erro na confirmação
+        }
+
+        // Aguardar um momento para garantir que o usuário foi criado
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
         // Criar perfil diretamente na tabela profiles
         const { error: profileError } = await supabase
           .from('profiles')
@@ -182,7 +212,27 @@ export default function Users() {
 
         if (profileError) {
           console.error('Erro ao criar perfil:', profileError);
-          throw profileError;
+          
+          // Se o erro for de chave estrangeira, tentar novamente após um pequeno delay
+          if (profileError.code === '23503') {
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            const { error: retryError } = await supabase
+              .from('profiles')
+              .insert([{
+                id: data.user.id,
+                email: newUser.email,
+                full_name: newUser.full_name,
+                role: newUser.role,
+                created_at: new Date().toISOString()
+              }]);
+
+            if (retryError) {
+              throw retryError;
+            }
+          } else {
+            throw profileError;
+          }
         }
 
         setShowModal(false);
@@ -207,6 +257,14 @@ export default function Users() {
         errorMessage = 'Por favor, aguarde 6 segundos antes de tentar criar outro usuário. Esta é uma medida de segurança.';
       } else if (error.message?.includes('Apenas administradores podem criar perfis')) {
         errorMessage = 'Você não tem permissão de administrador para criar perfis.';
+      } else if (error.code === '409') {
+        errorMessage = 'Este email já está cadastrado no sistema.';
+      } else if (error.code === '23503') {
+        errorMessage = 'Erro ao criar perfil: O usuário não foi criado corretamente. Por favor, tente novamente.';
+      } else if (error.message?.includes('User not allowed')) {
+        errorMessage = 'Você não tem permissão para realizar esta operação.';
+      } else if (error.message?.includes('Email not confirmed')) {
+        errorMessage = 'Erro ao confirmar o email. Por favor, tente novamente.';
       }
       
       setError(errorMessage);
