@@ -11,9 +11,8 @@ import Header from './components/Header';
 import Footer from './components/Footer';
 
 function App() {
-  const { session, signOut, user } = useAuth();
+  const { session, signOut } = useAuth();
   const location = useLocation();
-  const isAdmin = user?.app_metadata?.role === 'admin' || user?.user_metadata?.role === 'admin';
 
   if (!session) {
     return <Login />;

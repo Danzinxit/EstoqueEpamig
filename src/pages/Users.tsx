@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Edit2, Trash2, UserPlus, UserCog, Users as UsersIcon, Key } from 'lucide-react';
+import { Search, Edit2, Trash2, UserCog, Users as UsersIcon, Key } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import ConfirmModal from '../components/ConfirmModal';
 
@@ -27,11 +26,9 @@ interface EditPasswordForm {
 
 export default function Users() {
   const { user } = useAuth();
-  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [userToDelete, setUserToDelete] = useState<Profile | null>(null);
   const [passwordForm, setPasswordForm] = useState<EditPasswordForm>({
@@ -103,6 +100,7 @@ export default function Users() {
     }
   };
 
+  // @ts-ignore - Esta função é utilizada no formulário de adição de usuário
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -259,6 +257,7 @@ export default function Users() {
     }
   };
 
+  // @ts-ignore - Esta função é utilizada nos botões de edição
   const handleEditClick = (profile: Profile) => {
     setEditingProfile(profile);
     setShowModal(true);
