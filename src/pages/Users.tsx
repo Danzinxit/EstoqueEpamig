@@ -38,6 +38,7 @@ export default function Users() {
     newPassword: '',
     confirmPassword: ''
   });
+  const [selectedUserForPassword, setSelectedUserForPassword] = useState<Profile | null>(null);
   const [newUser, setNewUser] = useState<NewUser>({ email: '', password: '', full_name: '', role: 'user' });
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [editingProfile, setEditingProfile] = useState<Profile | null>(null);
@@ -45,6 +46,7 @@ export default function Users() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [cooldown, setCooldown] = useState(0);
+  const isAdmin = user?.app_metadata?.role === 'admin' || user?.user_metadata?.role === 'admin';
 
   useEffect(() => {
     let timer: NodeJS.Timeout;
@@ -65,53 +67,37 @@ export default function Users() {
   }, [cooldown]);
 
   useEffect(() => {
-    const isAdmin = user?.app_metadata?.role === 'admin' || user?.user_metadata?.role === 'admin';
-    if (!isAdmin) {
-      navigate('/');
-    } else {
-      fetchProfiles();
-    }
-  }, [user, navigate]);
+    fetchProfiles();
+  }, [user]);
 
   const fetchProfiles = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      // Verificar se o usuário está autenticado
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError) throw sessionError;
-      if (!session) {
-        setError('Usuário não autenticado');
-        return;
+      if (isAdmin) {
+        // Se for admin, buscar todos os perfis
+        const { data: allProfiles, error: allProfilesError } = await supabase
+          .from('profiles')
+          .select('*')
+          .order('email');
+
+        if (allProfilesError) throw allProfilesError;
+        setProfiles(allProfiles || []);
+      } else {
+        // Se não for admin, buscar apenas o próprio perfil
+        const { data: profileData, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user?.id)
+          .single();
+
+        if (profileError) throw profileError;
+        setProfiles(profileData ? [profileData] : []);
       }
-
-      // Buscar perfis existentes
-      const { data: profilesData, error: profilesError } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('email');
-
-      if (profilesError) {
-        console.error('Erro ao buscar perfis:', profilesError);
-        throw profilesError;
-      }
-
-      console.log('Perfis encontrados:', profilesData);
-
-      // Mapear os dados dos perfis
-      const mappedProfiles = (profilesData || []).map(profile => ({
-        id: profile.id,
-        email: profile.email,
-        full_name: profile.full_name || profile.email?.split('@')[0] || '',
-        role: profile.role || 'user',
-        created_at: profile.created_at
-      }));
-
-      setProfiles(mappedProfiles);
     } catch (error: any) {
-      console.error('Erro detalhado ao buscar perfis:', error);
-      setError('Não foi possível carregar os usuários. Por favor, tente novamente mais tarde.');
+      console.error('Erro ao buscar perfis:', error);
+      setError('Não foi possível carregar as informações. Por favor, tente novamente mais tarde.');
     } finally {
       setLoading(false);
     }
@@ -282,73 +268,128 @@ export default function Users() {
 
   const handleEditProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingProfile) return;
-
     try {
-      setLoading(true);
       setError(null);
+      setSuccess(null);
 
-      const formData = new FormData(e.target as HTMLFormElement);
-      const full_name = formData.get('full_name') as string;
-      const role = formData.get('role') as string;
+      if (!editingProfile) return;
 
-      const { error } = await supabase
-        .from('profiles')
-        .update({ 
-          full_name,
-          role,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', editingProfile.id);
+      const isAdmin = user?.app_metadata?.role === 'admin' || user?.user_metadata?.role === 'admin';
+      if (!isAdmin && editingProfile.id !== user?.id) {
+        setError('Você não tem permissão para editar outros usuários.');
+        return;
+      }
 
-      if (error) throw error;
+      if (isAdmin && editingProfile.id !== user?.id) {
+        // Se for admin editando outro usuário, usa a função RPC
+        const { error: rpcError } = await supabase.rpc('update_user_role', {
+          user_id_to_update: editingProfile.id,
+          new_role: editingProfile.role,
+          new_full_name: editingProfile.full_name || ''
+        });
 
-      setSuccess('Usuário atualizado com sucesso!');
-      setShowModal(false);
-      setEditingProfile(null);
+        if (rpcError) throw rpcError;
+      } else {
+        // Se for usuário editando próprio perfil, apenas atualiza o nome
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update({
+            full_name: editingProfile.full_name
+          })
+          .eq('id', editingProfile.id);
+
+        if (updateError) throw updateError;
+      }
+
       await fetchProfiles();
-    } catch (error) {
-      setError(error instanceof Error ? error.message : 'Erro ao atualizar usuário');
-    } finally {
-      setLoading(false);
+      setEditingProfile(null);
+      setShowModal(false);
+      setSuccess('Perfil atualizado com sucesso!');
+    } catch (error: any) {
+      console.error('Erro ao atualizar perfil:', error);
+      let errorMessage = 'Erro ao atualizar perfil. Por favor, tente novamente.';
+      
+      if (error.message?.includes('permission denied')) {
+        errorMessage = 'Você não tem permissão para realizar esta operação.';
+      } else if (error.message?.includes('User not allowed')) {
+        errorMessage = 'Você não tem permissão para editar este usuário.';
+      }
+      
+      setError(errorMessage);
     }
   };
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     try {
-      setLoading(true);
       setError(null);
+      setSuccess(null);
 
-      if (!selectedUserId) {
-        throw new Error('Usuário não selecionado');
+      if (!selectedUserForPassword) {
+        setError('Usuário não selecionado.');
+        return;
       }
 
       if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-        throw new Error('As senhas não coincidem');
+        setError('As senhas não coincidem.');
+        return;
       }
 
       if (passwordForm.newPassword.length < 6) {
-        throw new Error('A senha deve ter no mínimo 6 caracteres');
+        setError('A senha deve ter no mínimo 6 caracteres.');
+        return;
       }
 
-      const { error } = await supabase.rpc('change_user_password', {
-        target_user_id: selectedUserId,
-        new_password: passwordForm.newPassword
-      });
+      // Verifica se é um admin alterando senha de outro usuário
+      if (isAdmin && selectedUserForPassword.id !== user?.id) {
+        // Usa a função RPC para atualizar a senha
+        const { data, error: rpcError } = await supabase.rpc('admin_update_user_password', {
+          user_id_to_update: selectedUserForPassword.id,
+          new_password: passwordForm.newPassword
+        });
 
-      if (error) throw error;
+        if (rpcError) {
+          console.error('Erro RPC:', rpcError);
+          throw new Error(rpcError.message);
+        }
 
-      setSuccess('Senha atualizada com sucesso!');
+        if (data && !data.success) {
+          throw new Error(data.error || 'Erro ao atualizar senha');
+        }
+      } else if (selectedUserForPassword.id === user?.id) {
+        // Usuário alterando própria senha
+        const { error: updateError } = await supabase.auth.updateUser({
+          password: passwordForm.newPassword
+        });
+
+        if (updateError) throw updateError;
+      } else {
+        throw new Error('Apenas administradores podem alterar senhas de outros usuários.');
+      }
+
       setShowPasswordModal(false);
       setPasswordForm({ newPassword: '', confirmPassword: '' });
-      setSelectedUserId(null);
+      setSelectedUserForPassword(null);
+      setSuccess('Senha atualizada com sucesso!');
     } catch (error: any) {
-      console.error('Erro ao atualizar senha:', error);
-      setError(error.message || 'Erro ao atualizar senha');
-    } finally {
-      setLoading(false);
+      console.error('Erro ao alterar senha:', error);
+      let errorMessage = 'Erro ao alterar senha. Por favor, tente novamente.';
+      
+      if (typeof error.message === 'string') {
+        if (error.message.includes('permission denied')) {
+          errorMessage = 'Você não tem permissão para realizar esta operação.';
+        } else if (error.message.includes('User not allowed')) {
+          errorMessage = 'Você não tem permissão para alterar a senha deste usuário.';
+        } else if (error.message.includes('Apenas administradores')) {
+          errorMessage = 'Apenas administradores podem alterar senhas de outros usuários.';
+        } else if (error.message.includes('Invalid password')) {
+          errorMessage = 'A senha fornecida é inválida. Certifique-se de que atende aos requisitos mínimos.';
+        } else if (error.message.includes('User not found')) {
+          errorMessage = 'Usuário não encontrado.';
+        }
+      }
+      
+      setError(errorMessage);
     }
   };
 
@@ -383,354 +424,303 @@ export default function Users() {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-full">
+        <div className="w-16 h-16 border-4 border-green-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6 animate-fade-in p-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-semibold text-gray-800 flex items-center space-x-2">
-          <UsersIcon size={28} className="text-green-600" />
-          <span>Usuários do Sistema</span>
-        </h2>
-        <button
-          className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg
-                   shadow-lg transform hover:scale-105 transition-all duration-200
-                   flex items-center space-x-2"
-          onClick={() => {
-            setEditingProfile(null);
-            setShowModal(true);
-            setError(null);
-            setSuccess(null);
-          }}
-          disabled={loading}
-        >
-          <UserPlus size={20} className="animate-bounce-light" />
-          <span>Adicionar Usuário</span>
-        </button>
+    <div className="container mx-auto p-4">
+      <div className="flex items-center space-x-3 mb-6">
+        {isAdmin ? (
+          <>
+            <UsersIcon size={32} className="text-green-600" />
+            <h1 className="text-2xl font-bold text-gray-800">Usuários do Sistema</h1>
+          </>
+        ) : (
+          <>
+            <UserCog size={32} className="text-green-600" />
+            <h1 className="text-2xl font-bold text-gray-800">Meu Perfil</h1>
+          </>
+        )}
       </div>
 
       {error && (
-        <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-lg
-                     animate-slide-in-right shadow-md">
+        <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4">
           {error}
         </div>
       )}
 
       {success && (
-        <div className="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 rounded-lg
-                     animate-slide-in-right shadow-md">
+        <div className="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-4">
           {success}
         </div>
       )}
 
-      <div className="bg-white rounded-xl shadow-xl overflow-hidden">
-        <div className="p-4 border-b border-gray-200">
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="Buscar usuários..."
-              className="w-full pl-10 pr-4 py-2 rounded-lg border-gray-300 focus:border-green-500 
-                       focus:ring-green-500 transition-all duration-200"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              disabled={loading}
-            />
-            <Search size={20} className="absolute left-3 top-2.5 text-gray-400" />
-          </div>
-        </div>
+      {isAdmin ? (
+        // Interface de Admin com lista completa de usuários
+        <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+          <div className="p-4">
+            <div className="flex items-center space-x-4 mb-4">
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  placeholder="Buscar usuários..."
+                  className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:border-green-500"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+                <Search className="absolute left-3 top-2.5 text-gray-400" size={20} />
+              </div>
+            </div>
 
-        {loading ? (
-          <div className="flex justify-center items-center py-8">
-            <div className="w-16 h-16 border-4 border-green-500 border-t-transparent 
-                         rounded-full animate-spin">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nome</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Função</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Data de Criação</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {profiles
+                    .filter(profile => 
+                      profile.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                      profile.email.toLowerCase().includes(searchTerm.toLowerCase())
+                    )
+                    .map((profile) => (
+                      <tr key={profile.id}>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm font-medium text-gray-900">{profile.full_name || '-'}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-500">{profile.email}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                            profile.role === 'admin' ? 'bg-purple-100 text-purple-800' : 'bg-green-100 text-green-800'
+                          }`}>
+                            {profile.role === 'admin' ? 'Administrador' : 'Usuário'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {new Date(profile.created_at).toLocaleDateString('pt-BR')}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <div className="flex space-x-3">
+                            <button
+                              onClick={() => {
+                                setEditingProfile(profile);
+                                setShowModal(true);
+                              }}
+                              className="text-green-600 hover:text-green-900"
+                              title="Editar"
+                            >
+                              <Edit2 size={18} />
+                            </button>
+                            <button
+                              onClick={() => {
+                                setSelectedUserForPassword(profile);
+                                setShowPasswordModal(true);
+                              }}
+                              className="text-blue-600 hover:text-blue-900"
+                              title="Alterar senha"
+                            >
+                              <Key size={18} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteProfile(profile)}
+                              className="text-red-600 hover:text-red-900"
+                              title="Excluir"
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
             </div>
           </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Nome
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Email
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Função
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Data de Criação
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Ações
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {profiles
-                  .filter(profile => 
-                    profile.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                    profile.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                    profile.role.toLowerCase().includes(searchTerm.toLowerCase())
-                  )
-                  .map((profile) => (
-                    <tr key={profile.id} className="hover:bg-gray-50 transition-colors duration-200">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">
-                          {profile.full_name || 'Sem nome'}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-500">{profile.email}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full
-                                     ${profile.role === 'admin' ? 'bg-purple-100 text-purple-800' : 'bg-green-100 text-green-800'}`}>
-                          {profile.role === 'admin' ? 'Administrador' : 'Usuário'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-500">
-                          {new Date(profile.created_at).toLocaleDateString('pt-BR')}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                        <button
-                          onClick={() => handleEditClick(profile)}
-                          className="text-indigo-600 hover:text-indigo-900 transition-colors duration-200"
-                          disabled={loading}
-                        >
-                          <Edit2 size={18} />
-                        </button>
-                        <button
-                          onClick={() => {
-                            setSelectedUserId(profile.id);
-                            setShowPasswordModal(true);
-                          }}
-                          className="text-yellow-600 hover:text-yellow-900 transition-colors duration-200"
-                          disabled={loading}
-                        >
-                          <Key size={18} />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteProfile(profile)}
-                          className="text-red-600 hover:text-red-900 transition-colors duration-200"
-                          disabled={loading}
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* Modal de Adicionar/Editar Usuário */}
-      {showModal && !editingProfile && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md transform transition-all duration-300 animate-scale-in">
-            <h2 className="text-2xl font-semibold mb-6 text-gray-800 flex items-center space-x-2">
-              <UserPlus size={24} className="text-green-500 animate-bounce-light" />
-              <span>Adicionar Novo Usuário</span>
-            </h2>
-            {cooldown > 0 && (
-              <div className="mb-4 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 rounded-lg">
-                <p>Aguarde {cooldown} segundos antes de criar outro usuário.</p>
-              </div>
-            )}
-            <form onSubmit={handleAddUser} className="space-y-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nome</label>
-                <input
-                  type="text"
-                  className="w-full rounded-lg border-gray-300 shadow-sm focus:border-green-500 
-                           focus:ring-green-500 transition-all duration-200"
-                  value={newUser.full_name}
-                  onChange={(e) => setNewUser({ ...newUser, full_name: e.target.value })}
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                <input
-                  type="email"
-                  className="w-full rounded-lg border-gray-300 shadow-sm focus:border-green-500 
-                           focus:ring-green-500 transition-all duration-200"
-                  value={newUser.email}
-                  onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Senha</label>
-                <input
-                  type="password"
-                  className="w-full rounded-lg border-gray-300 shadow-sm focus:border-green-500 
-                           focus:ring-green-500 transition-all duration-200"
-                  value={newUser.password}
-                  onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Função</label>
-                <select
-                  className="w-full rounded-lg border-gray-300 shadow-sm focus:border-green-500 
-                           focus:ring-green-500 transition-all duration-200"
-                  value={newUser.role}
-                  onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
-                  required
-                >
-                  <option value="user">Usuário</option>
-                  <option value="admin">Administrador</option>
-                </select>
-              </div>
-              <div className="flex justify-end space-x-3 mt-8">
-                <button
-                  type="button"
-                  className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700
-                           hover:bg-gray-50 transform hover:scale-105 transition-all duration-200"
-                  onClick={() => {
-                    setShowModal(false);
-                    setNewUser({ email: '', password: '', full_name: '', role: 'user' });
-                  }}
-                >
-                  Cancelar
-                </button>
-                <button 
-                  type="submit" 
-                  className="px-4 py-2 rounded-lg bg-green-600 text-white
-                           hover:bg-green-700 transform hover:scale-105 transition-all duration-200
-                           flex items-center space-x-2"
-                  disabled={loading}
-                >
-                  <UserPlus size={20} className="animate-bounce-light" />
-                  <span>{loading ? 'Criando...' : 'Criar Usuário'}</span>
-                </button>
-              </div>
-            </form>
-          </div>
+        </div>
+      ) : (
+        // Interface de Usuário com apenas seu próprio perfil
+        <div className="bg-white rounded-lg shadow-lg p-6">
+          {profiles.map((profile) => (
+            <div key={profile.id} className="border-b border-gray-200 py-4 last:border-b-0">
+              {editingProfile?.id === profile.id ? (
+                <form onSubmit={handleEditProfile} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Nome</label>
+                    <input
+                      type="text"
+                      value={editingProfile.full_name || ''}
+                      onChange={(e) => setEditingProfile({ ...editingProfile, full_name: e.target.value })}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500"
+                    />
+                  </div>
+                  <div className="flex space-x-2">
+                    <button
+                      type="submit"
+                      className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700"
+                    >
+                      Salvar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingProfile(null)}
+                      className="bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-medium text-gray-900">{profile.full_name || profile.email}</h3>
+                    <p className="text-sm text-gray-500">{profile.email}</p>
+                  </div>
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => {
+                        setEditingProfile(profile);
+                        setShowModal(true);
+                      }}
+                      className="text-green-600 hover:text-green-700"
+                      title="Editar nome"
+                    >
+                      <Edit2 size={20} />
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSelectedUserForPassword(profile);
+                        setShowPasswordModal(true);
+                      }}
+                      className="text-blue-600 hover:text-blue-700"
+                      title="Alterar senha"
+                    >
+                      <Key size={20} />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
 
-      {/* Modal de Edição */}
-      {showModal && editingProfile && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md transform transition-all duration-300 animate-scale-in">
-            <h2 className="text-2xl font-semibold mb-6 text-gray-800 flex items-center space-x-2">
-              <UserCog size={24} className="text-blue-500 animate-bounce-light" />
-              <span>Editar Usuário</span>
-            </h2>
-            <form onSubmit={handleEditProfile} className="space-y-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nome</label>
-                <input
-                  type="text"
-                  name="full_name"
-                  defaultValue={editingProfile.full_name || ''}
-                  className="w-full rounded-lg border-gray-300 shadow-sm focus:border-green-500 
-                           focus:ring-green-500 transition-all duration-200"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Função</label>
-                <select
-                  name="role"
-                  defaultValue={editingProfile.role}
-                  className="w-full rounded-lg border-gray-300 shadow-sm focus:border-green-500 
-                           focus:ring-green-500 transition-all duration-200"
-                  required
-                >
-                  <option value="user">Usuário</option>
-                  <option value="admin">Administrador</option>
-                </select>
-              </div>
-              <div className="flex justify-end space-x-3 mt-8">
-                <button
-                  type="button"
-                  className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700
-                           hover:bg-gray-50 transform hover:scale-105 transition-all duration-200"
-                  onClick={() => {
-                    setShowModal(false);
-                    setEditingProfile(null);
-                  }}
-                >
-                  Cancelar
-                </button>
-                <button 
-                  type="submit" 
-                  className="px-4 py-2 rounded-lg bg-blue-600 text-white
-                           hover:bg-blue-700 transform hover:scale-105 transition-all duration-200
-                           flex items-center space-x-2"
-                  disabled={loading}
-                >
-                  <UserCog size={20} className="animate-bounce-light" />
-                  <span>{loading ? 'Salvando...' : 'Salvar Alterações'}</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Modal de Alteração de Senha */}
+      {/* Modal de alteração de senha */}
       {showPasswordModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md transform transition-all duration-300 animate-scale-in">
-            <h2 className="text-2xl font-semibold mb-6 text-gray-800 flex items-center space-x-2">
-              <Key size={24} className="text-yellow-500 animate-bounce-light" />
-              <span>Alterar Senha</span>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h2 className="text-xl font-bold mb-4">
+              {isAdmin && selectedUserForPassword
+                ? `Alterar Senha - ${selectedUserForPassword.full_name || selectedUserForPassword.email}`
+                : 'Alterar Senha'}
             </h2>
-            <form onSubmit={handlePasswordChange} className="space-y-6">
+            <form onSubmit={handlePasswordChange} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nova Senha</label>
+                <label className="block text-sm font-medium text-gray-700">Nova Senha</label>
                 <input
                   type="password"
-                  className="w-full rounded-lg border-gray-300 shadow-sm focus:border-green-500 
-                           focus:ring-green-500 transition-all duration-200"
                   value={passwordForm.newPassword}
                   onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
-                  required
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500"
                   minLength={6}
+                  required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Confirmar Nova Senha</label>
+                <label className="block text-sm font-medium text-gray-700">Confirmar Nova Senha</label>
                 <input
                   type="password"
-                  className="w-full rounded-lg border-gray-300 shadow-sm focus:border-green-500 
-                           focus:ring-green-500 transition-all duration-200"
                   value={passwordForm.confirmPassword}
                   onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
-                  required
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500"
                   minLength={6}
+                  required
                 />
               </div>
-              <div className="flex justify-end space-x-3 mt-8">
+              <div className="flex space-x-2">
+                <button
+                  type="submit"
+                  className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700"
+                >
+                  Salvar
+                </button>
                 <button
                   type="button"
-                  className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700
-                           hover:bg-gray-50 transform hover:scale-105 transition-all duration-200"
                   onClick={() => {
                     setShowPasswordModal(false);
+                    setSelectedUserForPassword(null);
                     setPasswordForm({ newPassword: '', confirmPassword: '' });
-                    setSelectedUserId(null);
                   }}
+                  className="bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400"
                 >
                   Cancelar
                 </button>
-                <button 
-                  type="submit" 
-                  className="px-4 py-2 rounded-lg bg-yellow-600 text-white
-                           hover:bg-yellow-700 transform hover:scale-105 transition-all duration-200
-                           flex items-center space-x-2"
-                  disabled={loading}
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de edição */}
+      {showModal && editingProfile && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h2 className="text-xl font-bold mb-4">
+              {isAdmin ? 'Editar Usuário' : 'Editar Perfil'}
+            </h2>
+            <form onSubmit={handleEditProfile} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Nome</label>
+                <input
+                  type="text"
+                  value={editingProfile.full_name || ''}
+                  onChange={(e) => setEditingProfile({ ...editingProfile, full_name: e.target.value })}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500"
+                />
+              </div>
+              
+              {isAdmin && editingProfile.id !== user?.id && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Função</label>
+                  <select
+                    value={editingProfile.role}
+                    onChange={(e) => setEditingProfile({ ...editingProfile, role: e.target.value })}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500"
+                  >
+                    <option value="user">Usuário</option>
+                    <option value="admin">Administrador</option>
+                  </select>
+                </div>
+              )}
+
+              <div className="flex space-x-2">
+                <button
+                  type="submit"
+                  className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700"
                 >
-                  <Key size={20} className="animate-bounce-light" />
-                  <span>{loading ? 'Alterando...' : 'Alterar Senha'}</span>
+                  Salvar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingProfile(null);
+                    setShowModal(false);
+                  }}
+                  className="bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400"
+                >
+                  Cancelar
                 </button>
               </div>
             </form>

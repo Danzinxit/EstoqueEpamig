@@ -11,8 +11,9 @@ import Header from './components/Header';
 import Footer from './components/Footer';
 
 function App() {
-  const { session, signOut } = useAuth();
+  const { session, signOut, user } = useAuth();
   const location = useLocation();
+  const isAdmin = user?.app_metadata?.role === 'admin' || user?.user_metadata?.role === 'admin';
 
   if (!session) {
     return <Login />;
@@ -87,7 +88,7 @@ function App() {
               }`}
             >
               <User size={20} className="mr-3 transition-transform duration-200 group-hover:scale-125 group-hover:text-green-600" />
-              <span className="transition-colors duration-200 group-hover:text-green-700">Usuários</span>
+              <span className="transition-colors duration-200 group-hover:text-green-700">Usuário</span>
             </Link>
           </nav>
           <div className="absolute bottom-0 w-64 p-4 border-t border-gray-200">
