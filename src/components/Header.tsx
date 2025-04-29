@@ -4,7 +4,7 @@ export default function Header() {
   return (
     <header className="w-full bg-gradient-to-r from-green-700 to-green-600 py-2 px-8 flex items-center justify-between shadow-md">
       <div className="flex items-center space-x-4">
-      <img src="/epamig.png" alt="EPAMIG" className="h-12 animate-fade-in-out" style={{ background: 'transparent' }} />
+      <img src="/logoepamig.png" alt="EPAMIG" className="h-12 animate-fade-in-out" style={{ background: 'transparent' }} />
         <div>
           <h1 className="text-2xl font-bold text-white">Empresa de Pesquisa Agropecuária de Minas Gerais</h1>
           <p className="text-sm text-white">Secretaria de Estado de Agricultura, Pecuária e Abastecimento</p>
