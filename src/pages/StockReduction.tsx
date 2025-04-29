@@ -62,6 +62,11 @@ export default function StockReduction() {
       return;
     }
 
+    if (!form.receiver.trim()) {
+      setError('O nome do recebedor é obrigatório.');
+      return;
+    }
+
     // Verificar quantidade disponível
     const selectedEquipment = equipment.find(eq => eq.id === form.equipmentId);
     if (!selectedEquipment) {
@@ -217,7 +222,7 @@ export default function StockReduction() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Recebedor</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Recebedor <span className="text-red-500">*</span></label>
           <input
             type="text"
             className="w-full rounded-lg border-gray-300 shadow-sm focus:border-green-500 \
@@ -225,6 +230,7 @@ export default function StockReduction() {
             value={form.receiver}
             onChange={(e) => setForm({ ...form, receiver: e.target.value })}
             placeholder="Nome de quem está recebendo o equipamento"
+            required
           />
         </div>
 
