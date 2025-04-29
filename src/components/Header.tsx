@@ -1,4 +1,3 @@
-import React from 'react';
 import { User, Globe, Mail } from 'lucide-react';
 
 export default function Header() {

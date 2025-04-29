@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
 
 interface ConfirmModalProps {
@@ -66,17 +66,6 @@ export default function ConfirmModal({
       await onConfirm();
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const getTypeStyles = () => {
-    switch (type) {
-      case 'danger':
-        return 'bg-red-100 border-red-500 text-red-700';
-      case 'info':
-        return 'bg-blue-100 border-blue-500 text-blue-700';
-      default:
-        return 'bg-yellow-100 border-yellow-500 text-yellow-700';
     }
   };
 

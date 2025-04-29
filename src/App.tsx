@@ -1,6 +1,4 @@
-import React, { useEffect } from 'react';
-import { Routes, Route, Navigate, useNavigate, Link, useLocation } from 'react-router-dom';
-import { Layout } from './components/Layout';
+import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Equipment from './pages/Equipment';
@@ -12,44 +10,9 @@ import { Home, Package, ArrowUpDown, ClipboardCheck, LogOut, User } from 'lucide
 import Header from './components/Header';
 import Footer from './components/Footer';
 
-function PrivateRoute({ children }: { children: React.ReactNode }) {
-  const { session, loading } = useAuth();
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-indigo-500"></div>
-      </div>
-    );
-  }
-
-  return session ? <>{children}</> : <Navigate to="/login" />;
-}
-
-const AdminRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, loading } = useAuth();
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    if (!loading) {
-      const isAdmin = user?.app_metadata?.role === 'admin' || user?.user_metadata?.role === 'admin';
-      if (!isAdmin) {
-        navigate('/');
-      }
-    }
-  }, [user, loading, navigate]);
-
-  if (loading) {
-    return <div>Carregando...</div>;
-  }
-
-  return <>{children}</>;
-};
-
 function App() {
   const { session, signOut } = useAuth();
   const location = useLocation();
-  const navigate = useNavigate();
 
   if (!session) {
     return <Login />;
