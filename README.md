@@ -117,3 +117,5 @@ Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para ma
 - EPAMIG pelo apoio e confiança
 - Comunidade open source pelas tecnologias utilizadas
 - Todos os contribuidores do projeto
+![{0F06EB6A-14AC-4915-86EA-1F676080FA22}](https://github.com/user-attachments/assets/3cc76efa-5b57-4fce-a25d-fa62fd22dfbb)
+
