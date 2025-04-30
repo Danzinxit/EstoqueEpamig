@@ -5,6 +5,7 @@ import Equipment from './pages/Equipment';
 import StockMovements from './pages/StockMovements';
 import StockReduction from './pages/StockReduction';
 import Users from './pages/Users';
+import NotFound from './pages/NotFound';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Home, Package, ArrowUpDown, ClipboardCheck, LogOut, User } from 'lucide-react';
 import Header from './components/Header';
@@ -108,6 +109,7 @@ function App() {
             <Route path="/movements" element={<StockMovements />} />
             <Route path="/reduction" element={<StockReduction />} />
             <Route path="/users" element={<Users />} />
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </div>
       </div>
