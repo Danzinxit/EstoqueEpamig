@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { Plus, Edit2, Trash2 } from 'lucide-react';
+import { Plus, Edit2, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
 
 interface Equipment {
@@ -48,6 +48,10 @@ export default function Equipment() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [equipmentToDelete, setEquipmentToDelete] = useState<Equipment | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  
+  // Paginação
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   // Fetch equipment data
   useEffect(() => {
@@ -200,6 +204,25 @@ export default function Equipment() {
     }
   };
 
+  // Lógica de paginação
+  const filteredEquipment = equipment.filter((item) => 
+    item.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const totalPages = Math.ceil(filteredEquipment.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentEquipment = filteredEquipment.slice(startIndex, endIndex);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const handleItemsPerPageChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setItemsPerPage(Number(e.target.value));
+    setCurrentPage(1);
+  };
+
   return (
     <div className="container mx-auto p-4">
       <div className="flex justify-between items-center mb-6">
@@ -243,27 +266,38 @@ export default function Equipment() {
         </div>
       )}
 
-      {/* Campo de Busca */}
-      <div className="mb-4 animate-fade-in">
-        <div className="relative">
+      {/* Campo de Busca e Seletor de Itens por Página */}
+      <div className="mb-4 flex items-center justify-between animate-fade-in">
+        <div className="relative flex-1 mr-4">
           <input
             type="text"
             placeholder="Buscar equipamentos..."
-            className="w-full rounded-lg border-gray-300 shadow-sm focus:border-green-500 
-                     focus:ring-green-500 pl-4 pr-10 py-3 transition-all duration-200
-                     hover:shadow-md"
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setCurrentPage(1);
+            }}
+            className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 
+                     focus:ring-green-500 focus:border-transparent transition-all duration-200"
           />
-          <div className="absolute right-3 top-3 text-gray-400">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-          </div>
+        </div>
+        <div className="flex items-center space-x-2">
+          <label htmlFor="itemsPerPage" className="text-gray-600">Itens por página:</label>
+          <select
+            id="itemsPerPage"
+            value={itemsPerPage}
+            onChange={handleItemsPerPageChange}
+            className="px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 
+                     focus:ring-green-500 focus:border-transparent transition-all duration-200"
+          >
+            <option value={5}>5</option>
+            <option value={10}>10</option>
+            <option value={20}>20</option>
+            <option value={50}>50</option>
+          </select>
         </div>
       </div>
 
-      {/* Tabela de Equipamentos */}
       {loading ? (
         <div className="flex justify-center items-center py-8 animate-pulse">
           <div className="w-16 h-16 border-4 border-green-500 border-t-transparent rounded-full animate-spin"></div>
@@ -280,50 +314,48 @@ export default function Equipment() {
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Ações</th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {equipment
-                .filter((item) => item.name.toLowerCase().includes(searchTerm.toLowerCase()))
-                .map((item) => (
-                  <tr key={item.id} className="hover:bg-gray-50 transition-colors duration-150">
-                    <td className="px-6 py-4 whitespace-nowrap text-gray-900">{item.name}</td>
-                    <td className="px-6 py-4 text-gray-700">{item.description || 'Sem descrição'}</td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="px-3 py-1 rounded-full text-sm font-semibold
-                                   bg-green-100 text-green-800">
-                        {item.quantity}
+            <tbody className="divide-y divide-gray-200">
+              {currentEquipment.map((item) => (
+                <tr key={item.id} className="hover:bg-gray-50 transition-colors duration-150">
+                  <td className="px-6 py-4 whitespace-nowrap text-gray-900">{item.name}</td>
+                  <td className="px-6 py-4 text-gray-700">{item.description || 'Sem descrição'}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className="px-3 py-1 rounded-full text-sm font-semibold
+                                 bg-green-100 text-green-800">
+                      {item.quantity}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-500">
+                      {new Date(item.created_at).toLocaleDateString('pt-BR')}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap space-x-3">
+                    <button
+                      className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1.5 rounded-lg
+                               transform transition-all duration-200 inline-flex items-center space-x-1
+                               hover:scale-110 hover:shadow-lg active:scale-95 focus:outline-none"
+                      onClick={() => handleEdit(item)}
+                    >
+                      <span className="animate-bounce-light">
+                        <Edit2 size={16} />
                       </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-500">
-                        {new Date(item.created_at).toLocaleDateString('pt-BR')}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap space-x-3">
-                      <button
-                        className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1.5 rounded-lg
-                                 transform transition-all duration-200 inline-flex items-center space-x-1
-                                 hover:scale-110 hover:shadow-lg active:scale-95 focus:outline-none"
-                        onClick={() => handleEdit(item)}
-                      >
-                        <span className="animate-bounce-light">
-                          <Edit2 size={16} />
-                        </span>
-                        <span>Editar</span>
-                      </button>
-                      <button
-                        className="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded-lg
-                                 transform transition-all duration-200 inline-flex items-center space-x-1
-                                 hover:scale-110 hover:shadow-lg active:scale-95 focus:outline-none"
-                        onClick={() => handleDeleteClick(item)}
-                      >
-                        <span className="animate-bounce-light">
-                          <Trash2 size={16} />
-                        </span>
-                        <span>Excluir</span>
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                      <span>Editar</span>
+                    </button>
+                    <button
+                      className="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded-lg
+                               transform transition-all duration-200 inline-flex items-center space-x-1
+                               hover:scale-110 hover:shadow-lg active:scale-95 focus:outline-none"
+                      onClick={() => handleDeleteClick(item)}
+                    >
+                      <span className="animate-bounce-light">
+                        <Trash2 size={16} />
+                      </span>
+                      <span>Excluir</span>
+                    </button>
+                  </td>
+                </tr>
+              ))}
               {equipment.length === 0 && (
                 <tr>
                   <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
@@ -339,6 +371,52 @@ export default function Equipment() {
               )}
             </tbody>
           </table>
+
+          {/* Paginação */}
+          <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-gray-700">
+                Mostrando {startIndex + 1} até {Math.min(endIndex, filteredEquipment.length)} de {filteredEquipment.length} itens
+              </div>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className={`p-2 rounded-lg transition-colors duration-200 ${
+                    currentPage === 1
+                      ? 'text-gray-400 cursor-not-allowed'
+                      : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  <ChevronLeft size={20} />
+                </button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                  <button
+                    key={page}
+                    onClick={() => handlePageChange(page)}
+                    className={`px-3 py-1 rounded-lg transition-colors duration-200 ${
+                      currentPage === page
+                        ? 'bg-green-600 text-white'
+                        : 'text-gray-600 hover:bg-gray-100'
+                    }`}
+                  >
+                    {page}
+                  </button>
+                ))}
+                <button
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className={`p-2 rounded-lg transition-colors duration-200 ${
+                    currentPage === totalPages
+                      ? 'text-gray-400 cursor-not-allowed'
+                      : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  <ChevronRight size={20} />
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
